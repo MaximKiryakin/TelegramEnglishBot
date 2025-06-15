@@ -2,14 +2,12 @@ import asyncio
 from os import getenv
 
 from aiogram import Bot, Dispatcher
-from aiogram.filters import Command
-from aiogram.types import Message
 from dotenv import load_dotenv
+from app.handlers import router
+
+from utils.database import initialize_database
 
 from utils.logger import Logger
-
-from utils.constant_strings import *
-from utils.database import get_random_phrasal_verb
 
 
 load_dotenv()
@@ -23,34 +21,24 @@ if TOKEN is None:
     raise ValueError("TELEGRAM_BOT_TOKEN is not set")
 
 dp = Dispatcher()
+bot = Bot(token=TOKEN)
 
+log.info("Initializing database")
+initialize_database()
+log.info("Database initialized")
 
-@dp.message(Command("start"))
-async def command_start_handler(message: Message) -> None:
-    await message.answer(START_GREETING)
-
-
-@dp.message(Command("get_phrasal_verb"))
-async def command_start_handler(message: Message) -> None:
-
-    phrasal_verb = get_random_phrasal_verb()
-
-    output = PHRASAL_VERB1.format(
-        phrasal_verb=phrasal_verb.phrasal_verb,
-        translate=phrasal_verb.translate,
-        example=phrasal_verb.example
-    )
-
-    await message.answer(output, parse_mode="HTML")
 
 
 
 async def main() -> None:
-    bot = Bot(token=TOKEN)
+    dp.include_router(router)
     log.info("Application started")
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log.info('Application stopped')
 
