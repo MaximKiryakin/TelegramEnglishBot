@@ -3,10 +3,14 @@ from os import getenv
 
 from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
-from app.handlers import router
+from app.phrasal_verbs_handlers import router
 
 from utils.database import initialize_database
-
+from aiogram import F, Router
+from aiogram.filters import Command
+from aiogram.types import Message
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from utils.constant_strings import *
 from utils.logger import Logger
 
 
@@ -29,7 +33,6 @@ log.info("Database initialized")
 
 
 
-
 async def main() -> None:
     dp.include_router(router)
     log.info("Application started")
@@ -41,4 +44,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         log.info('Application stopped')
+
 
