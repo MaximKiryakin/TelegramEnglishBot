@@ -15,6 +15,15 @@ class PhrasalVerb:
         self.translate = translate
         self.example = example
 
+@dataclass
+class User:
+    def __init__(self, telegram_user_id, first_name, second_name, fv_use_favourite, pv_quiz_words_num):
+        self.telegram_user_id = telegram_user_id
+        self.first_name = first_name
+        self.second_name = second_name
+        self.fv_use_favourite = fv_use_favourite
+        self.pv_quiz_words_num = pv_quiz_words_num
+
 
 def create_or_update_phrasal_verbs_table():
     log.info("Creating or updating phrasal_verbs table")
@@ -57,7 +66,9 @@ def create_users_table():
     CREATE TABLE IF NOT EXISTS users (
         telegram_user_id BIGINT PRIMARY KEY,
         first_name varchar(100),
-        second_name varchar(100)
+        second_name varchar(100),
+        fv_use_favourite BOOLEAN DEFAULT FALSE,
+        pv_quiz_words_num INTEGER DEFAULT 10
     )''')
 
     conn.commit()
@@ -138,3 +149,68 @@ def add_favorite_word(user_id: int, word_id: str):
 
     conn.commit()
     conn.close()
+
+
+def get_favorite_words(user_id: int):
+    conn = sqlite3.connect('data/db.sqlite3')
+    cursor = conn.cursor()
+
+    # Создаем связь
+    cursor.execute('''
+        SELECT user_words.telegram_user_id, user_words.word_id, phrasal_verbs.phrasal_verb  
+        FROM user_words
+        JOIN phrasal_verbs ON user_words.word_id = phrasal_verbs.word_id
+        WHERE user_words.telegram_user_id = ?
+    ''', (user_id, ))
+
+    result = cursor.fetchall()
+    conn.close()
+
+    return result
+
+
+def get_user_info(user_id: int) -> User:
+
+    conn = sqlite3.connect("data/db.sqlite3")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM users where telegram_user_id = ? LIMIT 1;", (user_id,))
+
+    result = cursor.fetchone()
+    conn.close()
+
+    return User(
+        telegram_user_id=result[0],
+        first_name=result[1],
+        second_name=result[2],
+        fv_use_favourite=result[3],
+        pv_quiz_words_num=result[4]
+    )
+
+
+def update_user_info(user: User):
+
+    conn = sqlite3.connect("data/db.sqlite3")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE users 
+        SET 
+            telegram_user_id = ?,
+            first_name = ?,
+            second_name = ?,
+            fv_use_favourite = ?,
+            pv_quiz_words_num = ?
+        WHERE telegram_user_id = ?;
+    """, (
+        user.telegram_user_id,
+        user.first_name,
+        user.second_name,
+        user.fv_use_favourite,
+        user.pv_quiz_words_num,
+        user.telegram_user_id
+    ))
+
+    conn.commit()
+    conn.close()
+
