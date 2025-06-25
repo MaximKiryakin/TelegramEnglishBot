@@ -179,24 +179,17 @@ async def get_user_info(user_id: int) -> Optional[User]:
         return None
 
 
-async def update_user_info(user: User):
+async def update_or_create_user(user: User):
     async with aiosqlite.connect("data/db.sqlite3") as conn:
-        cursor = await conn.cursor()
-
-        await cursor.execute("""
-            UPDATE users 
-            SET 
-                first_name = ?,
-                second_name = ?,
-                fv_use_favourite = ?,
-                pv_quiz_words_num = ?
-            WHERE telegram_user_id = ?;
+        await conn.execute("""
+            INSERT OR REPLACE INTO users 
+            (telegram_user_id, first_name, second_name, fv_use_favourite, pv_quiz_words_num)
+            VALUES (?, ?, ?, ?, ?)
         """, (
+            user.telegram_user_id,
             user.first_name,
             user.second_name,
-            int(user.fv_use_favourite),  # Конвертируем bool в int
-            user.pv_quiz_words_num,
-            user.telegram_user_id
+            int(user.fv_use_favourite),
+            user.pv_quiz_words_num
         ))
-
         await conn.commit()
