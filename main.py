@@ -27,13 +27,15 @@ if TOKEN is None:
 dp = Dispatcher()
 bot = Bot(token=TOKEN)
 
-log.info("Initializing database")
-initialize_database()
-log.info("Database initialized")
+
 
 
 
 async def main() -> None:
+
+    log.info("Initializing database")
+    await initialize_database()
+    log.info("Database initialized")
     dp.include_router(router)
     log.info("Application started")
     await dp.start_polling(bot)

@@ -32,10 +32,10 @@ async def command_start_handler(message: Message) -> None:
 def pv_hub_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text='Начать тренировку', callback_data='next_verb')],
+            [InlineKeyboardButton(text='▶ Начать тренировку', callback_data='next_verb')],
             [
-                InlineKeyboardButton(text='Назад', callback_data='back_to_start_menu'),
-                InlineKeyboardButton(text='Параметры тренировки', callback_data='pv_parameters')
+                InlineKeyboardButton(text='↩ Назад', callback_data='back_to_start_menu'),
+                InlineKeyboardButton(text='⚙️ Параметры', callback_data='pv_parameters')
             ]
         ]
     )
@@ -55,23 +55,19 @@ def get_training_kb(word_id: int) -> InlineKeyboardMarkup:
 
 
 async def show_phrasal_verbs_menu(respond_method: callable, user_id: int):
-    answer = """
-    Этот раздел посвящен тренировке фразовых глаголов.
-
-    Вы можете установить нужные параметры тренировки по кнопе 'параметры тренировки'.
-    """
 
     if user_id not in user_sessions:
         user_sessions[user_id] = {
             'count': 0,
             'verbs': [],
             'welcome_message_id': None,
-            'favorite_words': list(map(lambda x: x[2], get_favorite_words(user_id)))
+            'favorite_words': await get_favorite_words(user_id),
+            'current_training_verbs': []
         }
 
     sent_message = await respond_method(
-        answer,
-        parse_mode="HTML",
+        PV_INTRO,
+        parse_mode="Markdown",
         reply_markup=pv_hub_kb()
     )
 
@@ -91,26 +87,38 @@ async def back_to_phrasal_verb_menu(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'next_verb')
 async def next_verb_handler(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    user_ifo = get_user_info(user_id)
 
+    user_id = callback.from_user.id
+    user_info = await get_user_info(user_id)
     session = user_sessions[user_id]
     session["count"] += 1
 
-    if session["count"] >= user_ifo.pv_quiz_words_num:
+    if session["count"] >= user_info.pv_quiz_words_num:
         learned_verbs = "\n".join(
             f"{verb.phrasal_verb:15} - {verb.translate}"
             for verb in session["verbs"]
         )
-        await callback.message.answer(
-            f"🎉 Тренировка завершена! Вы изучили:\n\n{learned_verbs}",
-            parse_mode="HTML"
+
+        await callback.message.edit_text(
+            TRAINING_END.format(learned_verbs),
+            parse_mode="Markdown",
+            reply_markup=pv_hub_kb()
         )
-        del user_sessions[user_id]
+        user_sessions[user_id]['count'] = 0
+        user_sessions[user_id]["verbs"] = []
+
         await callback.answer()
         return
 
-    phrasal_verb = get_random_phrasal_verb()
+    if user_info.fv_use_favourite:
+        phrasal_verb = session["favorite_words"][session["count"] - 1]
+    elif not user_sessions[user_id]['current_training_verbs']:
+        user_sessions[user_id]['current_training_verbs'] \
+            = await get_random_phrasal_verbs(user_info.pv_quiz_words_num)
+        phrasal_verb = session["current_training_verbs"][0]
+    else:
+        phrasal_verb = session["current_training_verbs"][session["count"] - 1]
+
     session["verbs"].append(phrasal_verb)
 
     output = PHRASAL_VERB1.format(
@@ -120,24 +128,28 @@ async def next_verb_handler(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(
-        f"Прогресс: {session['count']}/{user_ifo.pv_quiz_words_num}\n\n" + output,
+        f"Прогресс: {session['count']}/{user_info.pv_quiz_words_num}\n\n" + output,
         parse_mode="HTML",
         reply_markup=get_training_kb(phrasal_verb.word_id)
     )
     await callback.answer()
 
 
-def pv_parameters_kb() -> InlineKeyboardMarkup:
+def pv_parameters_kb(favorite: bool = False) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text='Изменить пункт 2.', callback_data='change2'),
+                InlineKeyboardButton(
+                    text='☆ Только избранные'
+                    if not favorite else '🌿 Все глаголы',
+                    callback_data='change2'
+                ),
             ],
-            [InlineKeyboardButton(text='Изменить пункт 1. на 5', callback_data='change1_5')],
-            [InlineKeyboardButton(text='Изменить пункт 1. на 10', callback_data='change1_10')],
-            [InlineKeyboardButton(text='Изменить пункт 1. на 15', callback_data='change1_15')],
-            [InlineKeyboardButton(text='Изменить пункт 1. на 20', callback_data='change1_20')],
-            [InlineKeyboardButton(text='Назад', callback_data='back_to_phrasal_verb_menu')],
+            [InlineKeyboardButton(text='Объём: 5', callback_data='change1_5')],
+            [InlineKeyboardButton(text='Объём: 10', callback_data='change1_10')],
+            [InlineKeyboardButton(text='Объём: 15', callback_data='change1_15')],
+            [InlineKeyboardButton(text='Объём: 20', callback_data='change1_20')],
+            [InlineKeyboardButton(text='↩ Назад', callback_data='back_to_phrasal_verb_menu')],
         ]
     )
 
@@ -145,20 +157,14 @@ def pv_parameters_kb() -> InlineKeyboardMarkup:
 @router.callback_query(F.data == 'pv_parameters')
 async def pv_parameters_handler(callback: CallbackQuery):
 
-    user_info = get_user_info(callback.from_user.id)
-    fv_use_favourite = user_info.fv_use_favourite
-
-    answer = f"""
-        Ваши текущие параметры:
-        
-        1. Количество слов: {user_info.pv_quiz_words_num}
-        2. Использовать только избранные слова: {'ДА' if fv_use_favourite else 'НЕТ'}
-    
-    """
+    user_info = await get_user_info(callback.from_user.id)
 
     await callback.message.answer(
-        answer,
-        reply_markup=pv_parameters_kb()
+        PV_ANSWER.format(
+            user_info.pv_quiz_words_num,
+            'ДА' if user_info.fv_use_favourite else 'НЕТ'
+        ),
+        reply_markup=pv_parameters_kb(favorite=user_info.fv_use_favourite)
     )
     await callback.answer()
 
@@ -166,7 +172,7 @@ async def pv_parameters_handler(callback: CallbackQuery):
 @router.callback_query(F.data == 'change2')
 async def change1_handler(callback: CallbackQuery):
 
-    user_info = get_user_info(callback.from_user.id)
+    user_info = await get_user_info(callback.from_user.id)
 
     if not user_info.fv_use_favourite and len(user_sessions[callback.from_user.id]['favorite_words']) < user_info.pv_quiz_words_num:
         ans = (
@@ -179,21 +185,19 @@ async def change1_handler(callback: CallbackQuery):
         )
     else:
         user_info.fv_use_favourite = not user_info.fv_use_favourite
-        update_user_info(user_info)
+        await update_user_info(user_info)
 
         ans = PV_ANSWER.format(
             user_info.pv_quiz_words_num,
             'ДА' if user_info.fv_use_favourite else 'НЕТ'
         )
 
+    if callback.message.text.strip().split(' ') != ans.strip().split(' '):
+        await callback.message.edit_text(
+            ans,
+            reply_markup=pv_parameters_kb(favorite=user_info.fv_use_favourite)
+        )
 
-
-    diff = [(i, a, b) for i, (a, b) in enumerate(zip(str(callback.message.text), str(ans))) if a != b]
-    print(diff)
-    await callback.message.edit_text(
-        ans,
-        reply_markup=pv_parameters_kb()
-    )
     await callback.answer()
 
 
@@ -201,29 +205,40 @@ async def change1_handler(callback: CallbackQuery):
 async def add_to_favorites(callback: CallbackQuery):
 
     new_quiz_words_num = callback.data.split('_')[1]
-    user_info = get_user_info(callback.from_user.id)
+    user_info = await get_user_info(callback.from_user.id)
 
     user_info.pv_quiz_words_num = int(new_quiz_words_num)
 
     if len(user_sessions[callback.from_user.id]['favorite_words']) < user_info.pv_quiz_words_num and user_info.fv_use_favourite:
         user_info.fv_use_favourite = not user_info.fv_use_favourite
 
-    update_user_info(user_info)
-
-    answer = f"""
-            Ваши текущие параметры:
-
-            1. Количество слов: {user_info.pv_quiz_words_num}
-            2. Использовать только избранные слова: {'ДА' if user_info.fv_use_favourite else 'НЕТ'}
-
-        """
+    await update_user_info(user_info)
 
     await callback.message.edit_text(
-        answer,
-        reply_markup=pv_parameters_kb()
+        PV_ANSWER.format(user_info.pv_quiz_words_num, 'ДА' if user_info.fv_use_favourite else 'НЕТ'),
+        reply_markup=pv_parameters_kb(favorite=user_info.fv_use_favourite)
     )
     await callback.answer()
 
+
+@router.callback_query(F.data == 'end_training')
+async def end_training_handler(callback: CallbackQuery):
+
+    user_id = callback.from_user.id
+    session = user_sessions.get(user_id)
+
+    if not session:
+        await callback.answer("Тренировка не начата")
+        return
+
+    learned_verbs = format_verbs_aligned(session["verbs"])
+
+    await callback.message.answer(
+        TRAINING_END.format(learned_verbs),
+        reply_markup=pv_hub_kb()
+    )
+    del user_sessions[user_id]
+    await callback.answer()
 
 
 
@@ -270,24 +285,6 @@ def format_verbs_aligned(verbs):
     return "\n".join(formatted_lines)
 
 
-@router.callback_query(F.data == 'end_training')
-async def end_training_handler(callback: CallbackQuery):
-
-    user_id = callback.from_user.id
-    session = user_sessions.get(user_id)
-
-    if not session:
-        await callback.answer("Тренировка не начата")
-        return
-
-    learned_verbs = format_verbs_aligned(session["verbs"])
-
-    await callback.message.answer(
-        f"🏁 Тренировка завершена досрочно!\n\nВы изучили:\n\n{learned_verbs}",
-        #parse_mode="HTML"
-    )
-    del user_sessions[user_id]
-    await callback.answer()
 
 
 
@@ -300,7 +297,7 @@ async def add_to_favorites(callback: CallbackQuery):
     user_id = callback.from_user.id
 
     try:
-        add_favorite_word(user_id, word_id)
+        await add_favorite_word(user_id, word_id)
         await callback.answer('Добавлено в избранное!', show_alert=False)
     except Exception as e:
         await callback.answer('Ошибка при добавлении', show_alert=True)
