@@ -28,11 +28,9 @@ dp = Dispatcher()
 bot = Bot(token=TOKEN)
 
 
-
-
-
 async def main() -> None:
-
+    import os
+    print(os.path.exists("data/db.sqlite3"))
     log.info("Initializing database")
     await initialize_database()
     log.info("Database initialized")

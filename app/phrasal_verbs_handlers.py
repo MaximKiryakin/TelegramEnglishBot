@@ -235,7 +235,8 @@ async def end_training_handler(callback: CallbackQuery):
 
     await callback.message.answer(
         TRAINING_END.format(learned_verbs),
-        reply_markup=pv_hub_kb()
+        reply_markup=pv_hub_kb(),
+        parse_mode="Markdown"
     )
     del user_sessions[user_id]
     await callback.answer()
