@@ -1,9 +1,7 @@
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import Message
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from utils.constant_strings import *
-from aiogram.types import CallbackQuery
 from utils.database import *
 
 from typing import Dict, List
@@ -26,6 +24,17 @@ async def back_to_start_menu(callback: CallbackQuery):
 
 @router.message(Command("start"))
 async def command_start_handler(message: Message) -> None:
+
+    await update_or_create_user(
+        User(
+            telegram_user_id=message.from_user.id,
+            first_name=message.from_user.first_name,
+            second_name=message.from_user.last_name,
+            fv_use_favourite=False,
+            pv_quiz_words_num=5
+        )
+    )
+
     await show_start_menu(message.answer)
 
 
@@ -56,14 +65,13 @@ def get_training_kb(word_id: int) -> InlineKeyboardMarkup:
 
 async def show_phrasal_verbs_menu(respond_method: callable, user_id: int):
 
-    if user_id not in user_sessions:
-        user_sessions[user_id] = {
-            'count': 0,
-            'verbs': [],
-            'welcome_message_id': None,
-            'favorite_words': await get_favorite_words(user_id),
-            'current_training_verbs': []
-        }
+    user_sessions[user_id] = {
+        'count': 0,
+        'verbs': [],
+        'welcome_message_id': None,
+        'favorite_words': await get_favorite_words(user_id),
+        'current_training_verbs': []
+    }
 
     sent_message = await respond_method(
         PV_INTRO,
@@ -93,7 +101,7 @@ async def next_verb_handler(callback: CallbackQuery):
     session = user_sessions[user_id]
     session["count"] += 1
 
-    if session["count"] >= user_info.pv_quiz_words_num:
+    if session["count"] > user_info.pv_quiz_words_num:
         learned_verbs = "\n".join(
             f"{verb.phrasal_verb:15} - {verb.translate}"
             for verb in session["verbs"]
@@ -185,7 +193,7 @@ async def change1_handler(callback: CallbackQuery):
         )
     else:
         user_info.fv_use_favourite = not user_info.fv_use_favourite
-        await update_user_info(user_info)
+        await update_or_create_user(user_info)
 
         ans = PV_ANSWER.format(
             user_info.pv_quiz_words_num,
@@ -212,7 +220,7 @@ async def add_to_favorites(callback: CallbackQuery):
     if len(user_sessions[callback.from_user.id]['favorite_words']) < user_info.pv_quiz_words_num and user_info.fv_use_favourite:
         user_info.fv_use_favourite = not user_info.fv_use_favourite
 
-    await update_user_info(user_info)
+    await update_or_create_user(user_info)
 
     await callback.message.edit_text(
         PV_ANSWER.format(user_info.pv_quiz_words_num, 'ДА' if user_info.fv_use_favourite else 'НЕТ'),
@@ -235,59 +243,26 @@ async def end_training_handler(callback: CallbackQuery):
 
     await callback.message.answer(
         TRAINING_END.format(learned_verbs),
-        reply_markup=pv_hub_kb()
+        reply_markup=pv_hub_kb(),
+        parse_mode="Markdown"
     )
-    del user_sessions[user_id]
+
+    user_sessions[user_id]['count'] = 0
+    user_sessions[user_id]["verbs"] = []
+
     await callback.answer()
 
 
-
-
-
-
-
-
-
-# @router.message(Command("start_training"))
-# async def start_training_handler(message: Message) -> None:
-#
-#     user_id = message.from_user.id
-#     user_sessions[user_id] = {"count": 0, "verbs": []}
-#
-#     phrasal_verb = get_random_phrasal_verb()
-#     user_sessions[user_id]["verbs"].append(phrasal_verb)
-#
-#     output = PHRASAL_VERB1.format(
-#         phrasal_verb=phrasal_verb.phrasal_verb,
-#         translate=phrasal_verb.translate,
-#         example=phrasal_verb.example
-#     )
-#
-#     await message.answer(
-#         "Тренировка началась! Всего будет 10 фразовых глаголов.\n\n" + output,
-#         parse_mode="HTML",
-#         reply_markup=get_training_kb(phrasal_verb.word_id)
-#     )
-
-
 def format_verbs_aligned(verbs):
-    # Находим максимальные длины для каждого столбца
+
     max_verb_len = max(len(verb.phrasal_verb) for verb in verbs)
-    max_translate_len = max(len(verb.translate) for verb in verbs)
 
     formatted_lines = []
     for verb in verbs:
-        # Форматируем строку с выравниванием обоих столбцов
         line = f"{verb.phrasal_verb}" + " "*(max_verb_len - len(verb.phrasal_verb)) + f" -- {verb.translate}"
-        print(line)
         formatted_lines.append(line)
 
     return "\n".join(formatted_lines)
-
-
-
-
-
 
 
 @router.callback_query(F.data.startswith('favorite_'))
@@ -305,8 +280,3 @@ async def add_to_favorites(callback: CallbackQuery):
 
     # Обязательно закрываем callback
     await callback.answer()
-
-
-
-
-

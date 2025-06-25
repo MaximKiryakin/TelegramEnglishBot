@@ -28,10 +28,8 @@ dp = Dispatcher()
 bot = Bot(token=TOKEN)
 
 
-
-
-
 async def main() -> None:
+
 
     log.info("Initializing database")
     await initialize_database()
