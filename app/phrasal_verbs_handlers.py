@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from utils.constant_strings import *
 from utils.database import *
-
+import random
 from typing import Dict, List
 from utils.logger import Logger
 log = Logger(__name__).get_logger()
@@ -44,6 +44,7 @@ def pv_hub_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text='▶ Начать тренировку', callback_data='next_verb')],
             [
                 InlineKeyboardButton(text='↩ Назад', callback_data='back_to_start_menu'),
+                InlineKeyboardButton(text='⭐ Избранное', callback_data='show_favorites'),
                 InlineKeyboardButton(text='⚙️ Параметры', callback_data='pv_parameters')
             ]
         ]
@@ -65,11 +66,14 @@ def get_training_kb(word_id: int) -> InlineKeyboardMarkup:
 
 async def show_phrasal_verbs_menu(respond_method: callable, user_id: int):
 
+    favorite_words = await get_favorite_words(user_id)
+    random.shuffle(favorite_words)
+
     user_sessions[user_id] = {
         'count': 0,
         'verbs': [],
         'welcome_message_id': None,
-        'favorite_words': await get_favorite_words(user_id),
+        'favorite_words': favorite_words,
         'current_training_verbs': []
     }
 
@@ -112,8 +116,10 @@ async def next_verb_handler(callback: CallbackQuery):
             parse_mode="Markdown",
             reply_markup=pv_hub_kb()
         )
+
         user_sessions[user_id]['count'] = 0
         user_sessions[user_id]["verbs"] = []
+        random.shuffle(user_sessions[user_id]['favorite_words'])
 
         await callback.answer()
         return
@@ -249,6 +255,7 @@ async def end_training_handler(callback: CallbackQuery):
 
     user_sessions[user_id]['count'] = 0
     user_sessions[user_id]["verbs"] = []
+    random.shuffle(user_sessions[user_id]['favorite_words'])
 
     await callback.answer()
 
@@ -278,5 +285,33 @@ async def add_to_favorites(callback: CallbackQuery):
         await callback.answer('Ошибка при добавлении', show_alert=True)
         log.error(f"Error adding favorite: {e}")
 
-    # Обязательно закрываем callback
+    await callback.answer()
+
+
+def favorite_words_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text='↩ Назад', callback_data='back_to_phrasal_verb_menu')]
+        ]
+    )
+
+
+@router.callback_query(F.data == 'show_favorites')
+async def show_favorites_handler(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    favorite_words = await get_favorite_words(user_id)
+
+    if not favorite_words:
+        await callback.message.answer(
+            "У вас пока нет избранных слов",
+            reply_markup=favorite_words_kb()
+        )
+    else:
+        formatted_words = format_verbs_aligned(favorite_words)
+        await callback.message.answer(
+            FAVORITE_WORDS.format(formatted_words),
+            reply_markup=favorite_words_kb(),
+            parse_mode="Markdown"
+        )
+
     await callback.answer()
