@@ -65,14 +65,13 @@ def get_training_kb(word_id: int) -> InlineKeyboardMarkup:
 
 async def show_phrasal_verbs_menu(respond_method: callable, user_id: int):
 
-    if user_id not in user_sessions:
-        user_sessions[user_id] = {
-            'count': 0,
-            'verbs': [],
-            'welcome_message_id': None,
-            'favorite_words': await get_favorite_words(user_id),
-            'current_training_verbs': []
-        }
+    user_sessions[user_id] = {
+        'count': 0,
+        'verbs': [],
+        'welcome_message_id': None,
+        'favorite_words': await get_favorite_words(user_id),
+        'current_training_verbs': []
+    }
 
     sent_message = await respond_method(
         PV_INTRO,
@@ -102,7 +101,7 @@ async def next_verb_handler(callback: CallbackQuery):
     session = user_sessions[user_id]
     session["count"] += 1
 
-    if session["count"] >= user_info.pv_quiz_words_num:
+    if session["count"] > user_info.pv_quiz_words_num:
         learned_verbs = "\n".join(
             f"{verb.phrasal_verb:15} - {verb.translate}"
             for verb in session["verbs"]
@@ -247,20 +246,20 @@ async def end_training_handler(callback: CallbackQuery):
         reply_markup=pv_hub_kb(),
         parse_mode="Markdown"
     )
-    del user_sessions[user_id]
+
+    user_sessions[user_id]['count'] = 0
+    user_sessions[user_id]["verbs"] = []
+
     await callback.answer()
 
 
 def format_verbs_aligned(verbs):
-    # Находим максимальные длины для каждого столбца
+
     max_verb_len = max(len(verb.phrasal_verb) for verb in verbs)
-    max_translate_len = max(len(verb.translate) for verb in verbs)
 
     formatted_lines = []
     for verb in verbs:
-        # Форматируем строку с выравниванием обоих столбцов
         line = f"{verb.phrasal_verb}" + " "*(max_verb_len - len(verb.phrasal_verb)) + f" -- {verb.translate}"
-        print(line)
         formatted_lines.append(line)
 
     return "\n".join(formatted_lines)
