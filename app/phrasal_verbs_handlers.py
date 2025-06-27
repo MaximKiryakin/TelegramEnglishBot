@@ -13,7 +13,7 @@ user_sessions = {}
 
 
 async def show_start_menu(respond_method: callable):
-    await respond_method(START_GREETING)
+    await respond_method(START_GREETING, parse_mode="HTML")
 
 
 @router.callback_query(F.data == 'back_to_start_menu')
@@ -43,9 +43,9 @@ def pv_hub_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text='▶ Начать тренировку', callback_data='next_verb')],
             [
-                InlineKeyboardButton(text='↩ Назад', callback_data='back_to_start_menu'),
-                InlineKeyboardButton(text='⭐ Избранное', callback_data='show_favorites'),
-                InlineKeyboardButton(text='⚙️ Параметры', callback_data='pv_parameters')
+                InlineKeyboardButton(text='🏠', callback_data='back_to_start_menu'),
+                InlineKeyboardButton(text='📚', callback_data='show_favorites'),
+                InlineKeyboardButton(text='⚙️', callback_data='pv_parameters')
             ]
         ]
     )
@@ -79,7 +79,7 @@ async def show_phrasal_verbs_menu(respond_method: callable, user_id: int):
 
     sent_message = await respond_method(
         PV_INTRO,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=pv_hub_kb()
     )
 
